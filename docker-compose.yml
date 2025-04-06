@@ -1,0 +1,27 @@
+services:
+  api_gateway:
+    build:
+      context: .
+      dockerfile: ./services/api-gateway/Dockerfile
+    ports:
+      - "8000:8000"
+    depends_on:
+      - user_service
+    networks:
+      - blog_network
+
+  user_service:
+    build:
+      context: .
+      dockerfile: ./services/user-service/Dockerfile
+    ports:
+      - "8001:8001"
+    environment:
+      - DB_URL=mysql+aiomysql://root:root@host.docker.internal:3306/analysis_blog_db
+    command: ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8001", "--reload"]
+    networks:
+      - blog_network
+
+networks:
+  blog_network:
+    driver: bridge
