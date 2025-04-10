@@ -1,32 +1,47 @@
 from fastapi import FastAPI, Request
 import httpx
+import socket
 import logging
+from routes.user_routes import router as user_router
+from routes.article_routes import router as article_router
+
 
 app = FastAPI(title="API Gateway")
 
-USER_SERVICE_URL = "http://user_service:8001/users"
-ARTICLE_SERVICE_URL = "http://article_service:8002/articles"
+SERVICE_NAME = "api-gateway"
+SERVICE_ID = "api-gateway-1"
+SERVICE_PORT = 8000
+CONSUL_HOST = "consul"
+CONSUL_PORT = 8500
 
-logger = logging.getLogger("uvicorn")
+logger = logging.getLogger("api-gateway")
+logger.setLevel(logging.INFO)   
 
-@app.post("/users/register/")
-async def register(request: Request):
-    body = await request.json()
-    logger.info(f"Request body: {body}")
+
+@app.on_event("startup")
+async def startup_event():
+    ip = socket.gethostbyname(socket.gethostname())
+    url = f"http://{CONSUL_HOST}:{CONSUL_PORT}/v1/agent/service/register"
+    data = {
+        "ID": SERVICE_ID,
+        "Name": SERVICE_NAME,
+        "Address": ip,
+        "Port": SERVICE_PORT,
+        "Check": {
+            "HTTP": f"http://{ip}:{SERVICE_PORT}/health",
+            "Interval": "10s"
+        }
+    }
     async with httpx.AsyncClient() as client:
-        response = await client.post(f"{USER_SERVICE_URL}/register/", json=body)
-        logger.info(f"Response status: {response.status_code}")
-        logger.info(f"Response body: {response.text}")
-        if response.status_code != 200:
-            return {"error": f"Failed to register user: {response.status_code}", "details": response.text}
         try:
-            return response.json()
-        except httpx.JSONDecodeError:
-            return {"error": "Invalid JSON response", "details": response.text}
+            res = await client.put(url, json=data)
+            logger.info(f"Consul register status: {res.status_code}")
+        except Exception as e:
+            logger.error(f"Failed to register with Consul: {e}")
 
-@app.post("/users/login/")
-async def login(request: Request):
-    body = await request.json()
-    async with httpx.AsyncClient() as client:
-        response = await client.post(f"{USER_SERVICE_URL}/login/", json=body)
-    return response.json()
+@app.get("/health")
+def health():
+    return {"status": "ok"}
+
+app.include_router(user_router)
+app.include_router(article_router)

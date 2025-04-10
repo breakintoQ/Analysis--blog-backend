@@ -6,11 +6,17 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from auth import create_access_token
 from database.database import get_db, init_db
 from database.models import User 
-import logging
+import httpx
+import socket
 
-logger = logging.getLogger("uvicorn")
 
 app = FastAPI(title="User Service")
+
+SERVICE_NAME = "user_service"
+SERVICE_ID = "user_service-1"
+SERVICE_PORT = 8001
+CONSUL_HOST = "consul"
+CONSUL_PORT = 8500
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
@@ -27,12 +33,38 @@ router = APIRouter(prefix="/users", tags=["Users"])
 
 @app.on_event("startup")
 async def startup_event():
-    init_db()
+    # 初始化数据库
+    await init_db()
+
+    # 注册服务到 Consul
+    ip = socket.gethostbyname(socket.gethostname())
+    url = f"http://{CONSUL_HOST}:{CONSUL_PORT}/v1/agent/service/register"
+    data = {
+        "ID": SERVICE_ID,
+        "Name": SERVICE_NAME,
+        "Address": ip,
+        "Port": SERVICE_PORT,
+        "Check": {
+            "HTTP": f"http://{ip}:{SERVICE_PORT}/health",
+            "Interval": "10s"
+        }
+    }
+    async with httpx.AsyncClient() as client:
+        try:
+            res = await client.put(url, json=data)
+            print(f"Consul register status: {res.status_code}")
+        except Exception as e:
+            print(f"Failed to register with Consul: {e}")
+
+
+@app.get("/health")
+def health():
+    return {"status": "ok"}
+
 
 @router.post("/register/")
 async def register(user: UserCreate, db: AsyncSession = Depends(get_db)):
     # 检查用户名是否已存在
-    logger.info(f"Registering user: {user.username}")
     result = await db.execute(select(User).where(User.username == user.username))
     if result.scalars().first():
         raise HTTPException(status_code=400, detail="Username already exists")
