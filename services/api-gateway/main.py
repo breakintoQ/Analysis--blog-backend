@@ -4,6 +4,7 @@ import socket
 import logging
 from routes.user_routes import router as user_router
 from routes.article_routes import router as article_router
+from routes.comment_routes import router as comment_router
 
 
 app = FastAPI(title="API Gateway")
@@ -45,3 +46,4 @@ def health():
 
 app.include_router(user_router)
 app.include_router(article_router)
+app.include_router(comment_router)
