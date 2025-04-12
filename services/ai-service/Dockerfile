@@ -6,6 +6,9 @@ WORKDIR /app
 COPY ../../requirements.txt ./requirements.txt
 RUN pip install --no-cache-dir -r requirements.txt
 
+
+RUN python -m spacy download zh_core_web_sm
+
 # 复制服务代码
 COPY ./services/ai-service /app
 
