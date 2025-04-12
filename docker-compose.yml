@@ -9,6 +9,7 @@ services:
       - user_service
       - article_service
       - comment_service
+      - ai_service
     environment:
       - CONSUL_HTTP_ADDR=consul:8500
     networks:
@@ -60,6 +61,21 @@ services:
     labels:
       - "com.consul.service.name=comment_service"
       - "com.consul.service.port=8003"
+
+  ai_service:
+    build:
+      context: .
+      dockerfile: ./services/ai-service/Dockerfile
+    ports:
+      - "8004:8004"
+    environment:
+      - DB_URL=mysql+aiomysql://root:root@host.docker.internal:3306/analysis_blog_db
+      - CONSUL_HTTP_ADDR=consul:8500
+    networks:
+      - blog_network
+    labels:
+      - "com.consul.service.name=ai_service"
+      - "com.consul.service.port=8004"
   consul:
     image: consul:1.14.5
     command: "agent -dev -client=0.0.0.0"
